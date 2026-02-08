@@ -219,7 +219,7 @@ fn determine_dir(
     });
     // Stolen from https://docs.rs/cargo_metadata/0.12.0/cargo_metadata/#examples
     let mut cargo_process = Command::new(cargo);
-    #[allow(clippy::needless_borrow)] // MSRV is 1.46
+    #[allow(clippy::needless_borrow)] // MSRV is 1.85
     cargo_process
         .args([
             "doc",
