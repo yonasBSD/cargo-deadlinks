@@ -65,7 +65,7 @@ fn parse_args() -> Result<MainArgs, shared::PicoError> {
         flag_ignore_fragments: args.contains("--ignore-fragments"),
         flag_check_http: args.contains("--check-http"),
         flag_forbid_http: args.contains("--forbid-http"),
-        arg_directory: args.free_os()?.into_iter().map(Into::into).collect(),
+        arg_directory: args.finish().into_iter().map(Into::into).collect(),
     };
     if args.flag_forbid_http && args.flag_check_http {
         Err(pico_args::Error::ArgumentParsingFailed {

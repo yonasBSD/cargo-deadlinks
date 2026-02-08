@@ -28,16 +28,14 @@ mod non_existent_http_link {
             .success();
 
         // succeeds without --check-http flag
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .arg("deadlinks")
             .current_dir("./tests/non_existent_http_link")
             .assert()
             .success();
 
         // fails with --check-http flag
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .args(["deadlinks", "--check-http"])
             .current_dir("./tests/non_existent_http_link")
             .assert()

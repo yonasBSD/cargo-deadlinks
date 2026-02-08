@@ -32,8 +32,7 @@ mod working_http_check {
             .success();
 
         // succeeds with --check-http flag
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .args(["deadlinks", "--check-http"])
             .current_dir("./tests/working_http_check")
             .assert()
@@ -43,8 +42,7 @@ mod working_http_check {
     #[test]
     fn forbid_checking() {
         remove_target("target2");
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .args([
                 "deadlinks",
                 "--forbid-http",

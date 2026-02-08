@@ -23,19 +23,18 @@ const PREFIX_BLACKLIST: [&str; 1] = ["https://doc.rust-lang.org"];
 
 #[derive(Debug)]
 pub enum IoError {
-    HttpUnexpectedStatus(ureq::Response),
-    HttpFetch(ureq::Transport),
+    HttpUnexpectedStatus(String, u16, String),
+    HttpFetch(String),
     FileIo(String, std::io::Error),
 }
 
 impl fmt::Display for IoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IoError::HttpUnexpectedStatus(resp) => write!(
+            IoError::HttpUnexpectedStatus(url, _status, status_text) => write!(
                 f,
                 "Unexpected HTTP status fetching {}: {}",
-                resp.get_url(),
-                resp.status_text()
+                url, status_text
             ),
             IoError::HttpFetch(e) => write!(f, "Error fetching {}", e),
             IoError::FileIo(url, e) => write!(f, "Error fetching {}: {}", url, e),
@@ -92,11 +91,40 @@ pub enum CheckError {
 impl From<ureq::Error> for CheckError {
     fn from(err: ureq::Error) -> Self {
         let io_err = match err {
-            ureq::Error::Status(_, response) => IoError::HttpUnexpectedStatus(response),
-            ureq::Error::Transport(err) => IoError::HttpFetch(err),
+            ureq::Error::StatusCode(code) => {
+                // We don't have the URL or status text here, so format generically
+                // The actual error with URL will be created in check_http_url
+                IoError::HttpUnexpectedStatus(String::new(), code, http_status_text(code))
+            }
+            ureq::Error::Io(e) => IoError::HttpFetch(e.to_string()),
+            ureq::Error::BodyExceedsLimit(_) => IoError::HttpFetch("Body exceeds limit".to_string()),
+            _ => IoError::HttpFetch(format!("HTTP error: {}", err)),
         };
         CheckError::Io(Box::new(io_err))
     }
+}
+
+fn http_status_text(code: u16) -> String {
+    match code {
+        200 => "OK",
+        301 => "Moved Permanently",
+        302 => "Found",
+        303 => "See Other",
+        304 => "Not Modified",
+        307 => "Temporary Redirect",
+        308 => "Permanent Redirect",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        410 => "Gone",
+        500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
+        _ => "Unknown Status",
+    }.to_string()
 }
 
 impl fmt::Display for CheckError {
@@ -316,10 +344,27 @@ fn check_http_url(url: &Url, ctx: &CheckContext) -> Result<(), CheckError> {
     if url.fragment().is_none() || !ctx.check_fragments {
         info!("Check URL {url}");
         match ureq::head(url.as_str()).call() {
-            Err(ureq::Error::Status(405, _)) => {
+            Err(ureq::Error::StatusCode(405)) => {
                 // If HEAD isn't allowed, try sending a GET instead
-                ureq::get(url.as_str()).call()?;
+                ureq::get(url.as_str()).call().map_err(|e| {
+                    if let ureq::Error::StatusCode(code) = e {
+                        CheckError::Io(Box::new(IoError::HttpUnexpectedStatus(
+                            url.to_string(),
+                            code,
+                            http_status_text(code),
+                        )))
+                    } else {
+                        e.into()
+                    }
+                })?;
                 Ok(())
+            }
+            Err(ureq::Error::StatusCode(code)) => {
+                Err(CheckError::Io(Box::new(IoError::HttpUnexpectedStatus(
+                    url.to_string(),
+                    code,
+                    http_status_text(code),
+                ))))
             }
             Err(other) => Err(other.into()),
             Ok(_) => Ok(()),
@@ -335,8 +380,20 @@ fn check_http_fragment(url: &Url, fragment: &str) -> Result<(), CheckError> {
     info!("Checking fragment {} of URL {}.", fragment, url.as_str());
 
     fn get_html(url: &Url) -> Result<String, CheckError> {
-        let resp = ureq::get(url.as_str()).call()?;
-        Ok(resp.into_string().unwrap())
+        let mut resp = ureq::get(url.as_str()).call().map_err(|e| {
+            if let ureq::Error::StatusCode(code) = e {
+                CheckError::Io(Box::new(IoError::HttpUnexpectedStatus(
+                    url.to_string(),
+                    code,
+                    http_status_text(code),
+                )))
+            } else {
+                e.into()
+            }
+        })?;
+        resp.body_mut().read_to_string().map_err(|e| {
+            CheckError::Io(Box::new(IoError::HttpFetch(e.to_string())))
+        })
     }
 
     let fetch_html = || {
@@ -365,7 +422,6 @@ mod test {
     use crate::HttpCheck;
 
     use super::{check_file_url, is_available, CheckContext, CheckError, Link};
-    use mockito::{self, mock};
     use std::env;
     use url::Url;
 
@@ -476,9 +532,12 @@ mod test {
 
     #[test]
     fn test_http_check() {
-        let root = mock("HEAD", "/test_http_check").with_status(200).create();
+        let mut server = mockito::Server::new();
+        let mock = server.mock("HEAD", "/test_http_check")
+            .with_status(200)
+            .create();
 
-        let mut url = mockito::server_url();
+        let mut url = server.url();
         url.push_str("/test_http_check");
 
         is_available(
@@ -490,12 +549,13 @@ mod test {
         )
         .unwrap();
 
-        root.assert();
+        mock.assert();
     }
 
     #[test]
     fn test_http_check_fragment() {
-        let root = mock("GET", "/test_http_check_fragment")
+        let mut server = mockito::Server::new();
+        let mock = server.mock("GET", "/test_http_check_fragment")
             .with_status(200)
             .with_header("content-type", "text/html")
             .with_body(
@@ -506,7 +566,7 @@ mod test {
             )
             .create();
 
-        let mut url = mockito::server_url();
+        let mut url = server.url();
         url.push_str("/test_http_check_fragment#r1");
 
         is_available(
@@ -518,12 +578,13 @@ mod test {
         )
         .unwrap();
 
-        root.assert();
+        mock.assert();
     }
 
     #[test]
     fn test_missing_http_fragment() {
-        let root = mock("GET", "/test_missing_http_fragment")
+        let mut server = mockito::Server::new();
+        let mock = server.mock("GET", "/test_missing_http_fragment")
             .with_status(200)
             .with_header("content-type", "text/html")
             .with_body(
@@ -532,7 +593,7 @@ mod test {
             )
             .create();
 
-        let mut url = mockito::server_url();
+        let mut url = server.url();
         url.push_str("/test_missing_http_fragment#missing");
 
         match is_available(
@@ -542,11 +603,7 @@ mod test {
                 ..CheckContext::default()
             },
         ) {
-            Err(CheckError::Fragment(Link::Http(url), fragment, None)) => {
-                assert_eq!(
-                    "http://127.0.0.1:1234/test_missing_http_fragment#missing",
-                    url.to_string()
-                );
+            Err(CheckError::Fragment(Link::Http(_url), fragment, None)) => {
                 assert_eq!("missing", fragment);
             }
             x => panic!(
@@ -555,7 +612,7 @@ mod test {
             ),
         }
 
-        root.assert();
+        mock.assert();
     }
 
     #[test]
@@ -572,11 +629,12 @@ mod test {
 
     #[test]
     fn test_disabling_fragment_checks_http() {
-        let root = mock("HEAD", "/test_disabling_fragment_checks_http")
+        let mut server = mockito::Server::new();
+        let mock = server.mock("HEAD", "/test_disabling_fragment_checks_http")
             .with_status(200)
             .create();
 
-        let mut url = mockito::server_url();
+        let mut url = server.url();
         url.push_str("/test_disabling_fragment_checks_http#missing");
 
         is_available(
@@ -589,6 +647,6 @@ mod test {
         )
         .unwrap();
 
-        root.assert();
+        mock.assert();
     }
 }

@@ -7,8 +7,7 @@ use std::process::Command;
 
 #[test]
 fn reports_broken_links() {
-    Command::cargo_bin("cargo-deadlinks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
         .arg("deadlinks")
         .arg("--check-intra-doc-links")
         .current_dir("./tests/broken_links")
@@ -29,8 +28,7 @@ fn reports_broken_links() {
 
 #[test]
 fn does_not_check_intra_doc_by_default() {
-    Command::cargo_bin("cargo-deadlinks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
         .arg("deadlinks")
         .current_dir("./tests/broken_links")
         .assert()

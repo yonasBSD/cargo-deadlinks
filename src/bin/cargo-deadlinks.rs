@@ -106,7 +106,13 @@ fn parse_args() -> Result<MainArgs, shared::PicoError> {
         flag_forbid_http: args.contains("--forbid-http"),
         cargo_args,
     };
-    args.finish()?;
+    let remaining = args.finish();
+    if !remaining.is_empty() {
+        return Err(pico_args::Error::ArgumentParsingFailed {
+            cause: format!("unexpected arguments: {:?}", remaining),
+        }
+        .into());
+    }
     if main_args.flag_forbid_http && main_args.flag_check_http {
         Err(pico_args::Error::ArgumentParsingFailed {
             cause: "--check-http and --forbid-http are mutually incompatible".into(),
@@ -263,15 +269,17 @@ fn has_docs(target: &cargo_metadata::Target) -> bool {
     // and https://github.com/rust-lang/docs.rs/issues/503#issuecomment-562797599
     // for the difference between `kind` and `crate_type`
 
+    use cargo_metadata::TargetKind;
+
     let mut kinds = target.kind.iter();
     // By default, ignore binaries
     if target.crate_types.contains(&"bin".into()) {
         // But allow them if this is a literal bin, and not a test or example
-        kinds.all(|kind| kind == "bin")
+        kinds.all(|kind| matches!(kind, TargetKind::Bin))
     } else {
         // We also have to consider examples and tests that are libraries
         // (e.g. because of `cdylib`).
-        kinds.all(|kind| !["example", "test", "bench"].contains(&kind.as_str()))
+        kinds.all(|kind| !matches!(kind, TargetKind::Example | TargetKind::Test | TargetKind::Bench))
     }
 }
 

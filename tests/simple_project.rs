@@ -7,7 +7,6 @@ use predicates::prelude::*;
 use std::env;
 use std::path::Path;
 use std::process::Command;
-use std::borrow::Cow;
 
 fn remove_all(path: &str) {
     match std::fs::remove_dir_all(path) {
@@ -23,7 +22,7 @@ fn remove_all(path: &str) {
 }
 
 fn deadlinks() -> Command {
-    let mut cmd = Command::cargo_bin("cargo-deadlinks").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"));
     cmd.arg("deadlinks").env_remove("CARGO_TARGET_DIR");
     cmd
 }
@@ -101,8 +100,7 @@ mod simple_project {
 
         // without --debug, paths are shortened
         // NOTE: uses `deadlinks` to avoid rebuilding the docs
-        Command::cargo_bin("deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("deadlinks"))
             .arg("./tests/simple_project/target/doc/simple_project")
             .assert()
             .failure()
@@ -112,8 +110,7 @@ mod simple_project {
             );
 
         // with --debug, paths are not shortened
-        Command::cargo_bin("deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("deadlinks"))
             .arg("--debug")
             .arg("./tests/simple_project/target/doc/simple_project")
             .assert()
@@ -181,8 +178,7 @@ mod cli_args {
 
     #[test]
     fn missing_deadlinks_gives_helpful_error() {
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .assert()
             .failure()
             .stderr(contains("should be run as `cargo deadlinks`"));
@@ -199,13 +195,11 @@ mod cli_args {
 
     #[test]
     fn version_contains_binary_name() {
-        Command::cargo_bin("deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("deadlinks"))
             .arg("--version")
             .assert()
             .stdout(starts_with("deadlinks "));
-        Command::cargo_bin("cargo-deadlinks")
-            .unwrap()
+        Command::new(assert_cmd::cargo::cargo_bin!("cargo-deadlinks"))
             .arg("deadlinks")
             .arg("--version")
             .assert()
