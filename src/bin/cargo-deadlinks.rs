@@ -69,7 +69,7 @@ fn parse_args() -> Result<MainArgs, shared::PicoError> {
 
     let mut args: Vec<_> = std::env::args_os().collect();
     args.remove(0);
-    if args.get(0).map_or(true, |arg| arg != "deadlinks") {
+    if args.first().is_none_or(|arg| arg != "deadlinks") {
         return Err(Error::ArgumentParsingFailed {
             cause: "cargo-deadlinks should be run as `cargo deadlinks`".into(),
         }
@@ -221,7 +221,7 @@ fn determine_dir(
     let mut cargo_process = Command::new(cargo);
     #[allow(clippy::needless_borrow)] // MSRV is 1.46
     cargo_process
-        .args(&[
+        .args([
             "doc",
             "--no-deps",
             "--message-format",
