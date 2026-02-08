@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process;
 
-use cargo_deadlinks::{walk_dir, CheckContext, HttpCheck};
+use cargo_deadlinks::{CheckContext, HttpCheck, walk_dir};
 use serde_derive::Deserialize;
 
 mod shared;

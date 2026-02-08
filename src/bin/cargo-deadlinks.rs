@@ -6,7 +6,7 @@ use std::process::{self, Command};
 use cargo_metadata::{Message, MetadataCommand};
 use serde_derive::Deserialize;
 
-use cargo_deadlinks::{walk_dir, CheckContext, HttpCheck};
+use cargo_deadlinks::{CheckContext, HttpCheck, walk_dir};
 
 mod shared;
 
@@ -279,7 +279,12 @@ fn has_docs(target: &cargo_metadata::Target) -> bool {
     } else {
         // We also have to consider examples and tests that are libraries
         // (e.g. because of `cdylib`).
-        kinds.all(|kind| !matches!(kind, TargetKind::Example | TargetKind::Test | TargetKind::Bench))
+        kinds.all(|kind| {
+            !matches!(
+                kind,
+                TargetKind::Example | TargetKind::Test | TargetKind::Bench
+            )
+        })
     }
 }
 

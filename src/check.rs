@@ -9,14 +9,14 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use cached::cached_key_result;
 use cached::SizedCache;
+use cached::cached_key_result;
 
 use super::CheckContext;
 
 use crate::{
-    parse::{parse_fragments, parse_redirect},
     HttpCheck,
+    parse::{parse_fragments, parse_redirect},
 };
 
 const PREFIX_BLACKLIST: [&str; 1] = ["https://doc.rust-lang.org"];
@@ -97,7 +97,9 @@ impl From<ureq::Error> for CheckError {
                 IoError::HttpUnexpectedStatus(String::new(), code, http_status_text(code))
             }
             ureq::Error::Io(e) => IoError::HttpFetch(e.to_string()),
-            ureq::Error::BodyExceedsLimit(_) => IoError::HttpFetch("Body exceeds limit".to_string()),
+            ureq::Error::BodyExceedsLimit(_) => {
+                IoError::HttpFetch("Body exceeds limit".to_string())
+            }
             _ => IoError::HttpFetch(format!("HTTP error: {}", err)),
         };
         CheckError::Io(Box::new(io_err))
@@ -124,7 +126,8 @@ fn http_status_text(code: u16) -> String {
         503 => "Service Unavailable",
         504 => "Gateway Timeout",
         _ => "Unknown Status",
-    }.to_string()
+    }
+    .to_string()
 }
 
 impl fmt::Display for CheckError {
@@ -359,13 +362,9 @@ fn check_http_url(url: &Url, ctx: &CheckContext) -> Result<(), CheckError> {
                 })?;
                 Ok(())
             }
-            Err(ureq::Error::StatusCode(code)) => {
-                Err(CheckError::Io(Box::new(IoError::HttpUnexpectedStatus(
-                    url.to_string(),
-                    code,
-                    http_status_text(code),
-                ))))
-            }
+            Err(ureq::Error::StatusCode(code)) => Err(CheckError::Io(Box::new(
+                IoError::HttpUnexpectedStatus(url.to_string(), code, http_status_text(code)),
+            ))),
             Err(other) => Err(other.into()),
             Ok(_) => Ok(()),
         }
@@ -391,9 +390,9 @@ fn check_http_fragment(url: &Url, fragment: &str) -> Result<(), CheckError> {
                 e.into()
             }
         })?;
-        resp.body_mut().read_to_string().map_err(|e| {
-            CheckError::Io(Box::new(IoError::HttpFetch(e.to_string())))
-        })
+        resp.body_mut()
+            .read_to_string()
+            .map_err(|e| CheckError::Io(Box::new(IoError::HttpFetch(e.to_string()))))
     }
 
     let fetch_html = || {
@@ -421,7 +420,7 @@ fn check_http_fragment(url: &Url, fragment: &str) -> Result<(), CheckError> {
 mod test {
     use crate::HttpCheck;
 
-    use super::{check_file_url, is_available, CheckContext, CheckError, Link};
+    use super::{CheckContext, CheckError, Link, check_file_url, is_available};
     use std::env;
     use url::Url;
 
@@ -533,7 +532,8 @@ mod test {
     #[test]
     fn test_http_check() {
         let mut server = mockito::Server::new();
-        let mock = server.mock("HEAD", "/test_http_check")
+        let mock = server
+            .mock("HEAD", "/test_http_check")
             .with_status(200)
             .create();
 
@@ -555,7 +555,8 @@ mod test {
     #[test]
     fn test_http_check_fragment() {
         let mut server = mockito::Server::new();
-        let mock = server.mock("GET", "/test_http_check_fragment")
+        let mock = server
+            .mock("GET", "/test_http_check_fragment")
             .with_status(200)
             .with_header("content-type", "text/html")
             .with_body(
@@ -584,7 +585,8 @@ mod test {
     #[test]
     fn test_missing_http_fragment() {
         let mut server = mockito::Server::new();
-        let mock = server.mock("GET", "/test_missing_http_fragment")
+        let mock = server
+            .mock("GET", "/test_missing_http_fragment")
             .with_status(200)
             .with_header("content-type", "text/html")
             .with_body(
@@ -630,7 +632,8 @@ mod test {
     #[test]
     fn test_disabling_fragment_checks_http() {
         let mut server = mockito::Server::new();
-        let mock = server.mock("HEAD", "/test_disabling_fragment_checks_http")
+        let mock = server
+            .mock("HEAD", "/test_disabling_fragment_checks_http")
             .with_status(200)
             .create();
 

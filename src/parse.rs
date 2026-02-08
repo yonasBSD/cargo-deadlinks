@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use log::debug;
-use lol_html::{element, RewriteStrSettings};
+use lol_html::{RewriteStrSettings, element};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;

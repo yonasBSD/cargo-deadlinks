@@ -6,8 +6,8 @@ use std::{
 };
 
 use log::info;
-use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 use url::Url;
 use walkdir::{DirEntry, WalkDir};
 
@@ -101,9 +101,10 @@ impl FileError {
         };
         for mut e in &mut self.errors {
             if let CheckError::File(epath) | CheckError::Fragment(Link::File(epath), _, _) = &mut e
-                && let Ok(shortened) = epath.strip_prefix(prefix) {
-                    *epath = shortened.to_path_buf();
-                }
+                && let Ok(shortened) = epath.strip_prefix(prefix)
+            {
+                *epath = shortened.to_path_buf();
+            }
         }
     }
 }
