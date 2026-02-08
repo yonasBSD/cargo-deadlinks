@@ -7,6 +7,7 @@ use predicates::prelude::*;
 use std::env;
 use std::path::Path;
 use std::process::Command;
+use std::borrow::Cow;
 
 fn remove_all(path: &str) {
     match std::fs::remove_dir_all(path) {
@@ -78,10 +79,19 @@ mod simple_project {
         remove_all("./tests/simple_project/target2");
         assert_doc("./tests/simple_project", &[("CARGO_TARGET_DIR", "target2")]).success();
 
-        let target: &str = option_env!("TARGET").unwrap_or("x86_64-unknown-linux-gnu");
+        let target: String = option_env!("TARGET")
+            .map(|s: &'static str| s.to_string())
+            .unwrap_or_else(|| {
+                // Explicitly typed constants from std::env::consts
+                let os: &'static str = std::env::consts::OS;
+                let arch: &'static str = std::env::consts::ARCH;
+
+                // Formats into a dynamic String (e.g., "x86_64-unknown-freebsd")
+                format!("{}-unknown-{}", arch, os)
+            });
 
         remove_all("./tests/simple_project/target");
-        assert_doc("./tests/simple_project", &[("CARGO_BUILD_TARGET", target)]).success();
+        assert_doc("./tests/simple_project", &[("CARGO_BUILD_TARGET", &target)]).success();
 
         // fn it_shortens_path_on_error
         remove_all("./tests/simple_project/target");
